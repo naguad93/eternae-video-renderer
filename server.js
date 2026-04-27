@@ -81,18 +81,28 @@ async function processVideo(job) {
       })
     );
 
-    // 2. Download music
+    // 2. Pre-scale photos to target resolution to avoid OOM on large originals
+    const W = 1280;
+    const H = 720;
+    const scaledPaths = new Array(photoUrls.length);
+    await Promise.all(
+      photoPaths.map(async (p, i) => {
+        const sp = path.join(tmpDir, `ps${i}.jpg`);
+        await runFFmpeg(["-i", p, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`, "-q:v", "2", "-y", sp]);
+        scaledPaths[i] = sp;
+      })
+    );
+
+    // 3. Download music
     const musicPath = path.join(tmpDir, "music.mp3");
     await download(MUSIC_URL, musicPath);
 
-    // 3. Build FFmpeg command
-    const W          = 1280;
-    const H          = 720;
+    // 4. Build FFmpeg command
     const PHOTO_DUR  = style === "cinematic" ? 3.5 : 2.8;
     const FADE       = 0.4;
     const INTRO_DUR  = 2.5;
     const OUTRO_DUR  = 2.5;
-    const n          = photoPaths.length;
+    const n          = scaledPaths.length;
 
     // Total content duration (photos with overlapping xfade)
     const contentDur = n * PHOTO_DUR - (n - 1) * FADE;
@@ -107,7 +117,7 @@ async function processVideo(job) {
     args.push("-f", "lavfi", "-t", String(OUTRO_DUR),
               "-i", `color=c=0x0e0c08:s=${W}x${H}:r=25`);
 
-    for (const p of photoPaths) {
+    for (const p of scaledPaths) {
       args.push("-loop", "1", "-t", String(PHOTO_DUR + FADE), "-i", p);
     }
     args.push("-i", musicPath);
@@ -144,7 +154,6 @@ async function processVideo(job) {
       const src = i + 2; // input index
       F.push(
         `[${src}:v]` +
-        `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},` +
         `setpts=PTS-STARTPTS` +
         `[v${i}]`
       );
