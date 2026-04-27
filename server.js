@@ -86,8 +86,8 @@ async function processVideo(job) {
     await download(MUSIC_URL, musicPath);
 
     // 3. Build FFmpeg command
-    const W          = 1920;
-    const H          = 1080;
+    const W          = 1280;
+    const H          = 720;
     const PHOTO_DUR  = style === "cinematic" ? 3.5 : 2.8;
     const FADE       = 0.4;
     const INTRO_DUR  = 2.5;
