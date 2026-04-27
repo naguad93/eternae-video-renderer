@@ -117,7 +117,7 @@ async function processVideo(job) {
     const musicIdx = n + 2;
 
     // Intro title card
-    const alpha = (st, en) =>
+    const alpha = (_st, en) =>
       `if(lt(t,0.4),t/0.4,if(lt(t,${en - 0.4}),1,if(lt(t,${en}),(${en}-t)/0.4,0)))`;
 
     F.push(
@@ -233,16 +233,41 @@ async function processVideo(job) {
   }
 }
 
+// ── Job Queue (one at a time to avoid OOM) ────────────────────────────
+const jobQueue = [];
+let processing = false;
+
+async function processQueue() {
+  if (processing || jobQueue.length === 0) return;
+  processing = true;
+  while (jobQueue.length > 0) {
+    const job = jobQueue.shift();
+    try {
+      await processVideo(job);
+    } catch (e) {
+      console.error("Unhandled job error:", e);
+    }
+  }
+  processing = false;
+}
+
+function enqueue(job) {
+  jobQueue.push(job);
+  processQueue();
+}
+
 // ── Routes ────────────────────────────────────────────────────────────
-app.get("/health", (_req, res) => res.json({ ok: true, service: "eternae-video-renderer" }));
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, service: "eternae-video-renderer", queue: jobQueue.length, processing })
+);
 
 app.post("/render", async (req, res) => {
   const job = req.body;
   if (!job?.photoUrls?.length || !job?.orderId) {
     return res.status(400).json({ error: "photoUrls and orderId required" });
   }
-  res.json({ success: true, message: "Rendering started", orderId: job.orderId });
-  processVideo(job).catch((e) => console.error("Unhandled job error:", e));
+  enqueue(job);
+  res.json({ success: true, message: "Rendering queued", orderId: job.orderId, position: jobQueue.length });
 });
 
 app.listen(PORT, () => console.log(`Video renderer listening on port ${PORT}`));
