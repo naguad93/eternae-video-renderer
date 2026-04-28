@@ -81,17 +81,15 @@ async function processVideo(job) {
       })
     );
 
-    // 2. Pre-scale photos to target resolution to avoid OOM on large originals
+    // 2. Pre-scale photos sequentially (one at a time) to avoid OOM
     const W = 1280;
     const H = 720;
-    const scaledPaths = new Array(photoUrls.length);
-    await Promise.all(
-      photoPaths.map(async (p, i) => {
-        const sp = path.join(tmpDir, `ps${i}.jpg`);
-        await runFFmpeg(["-i", p, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`, "-q:v", "2", "-y", sp]);
-        scaledPaths[i] = sp;
-      })
-    );
+    const scaledPaths = [];
+    for (const p of photoPaths) {
+      const sp = p.replace(/\.(png|jpg|jpeg)$/i, "_scaled.jpg");
+      await runFFmpeg(["-i", p, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`, "-q:v", "2", "-y", sp]);
+      scaledPaths.push(sp);
+    }
 
     // 3. Download music
     const musicPath = path.join(tmpDir, "music.mp3");
