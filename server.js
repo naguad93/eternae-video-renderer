@@ -87,7 +87,14 @@ async function processVideo(job) {
     const scaledPaths = [];
     for (const p of photoPaths) {
       const sp = p.replace(/\.(png|jpg|jpeg)$/i, "_scaled.jpg");
-      await runFFmpeg(["-i", p, "-vf", `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`, "-q:v", "2", "-y", sp]);
+      // Blurred background: foto entera centrada sobre fondo difuminado de la misma foto
+      const vf = [
+        `split[bg][fg]`,
+        `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=20:5[blurred]`,
+        `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black@0[fit]`,
+        `[blurred][fit]overlay=(W-w)/2:(H-h)/2`,
+      ].join(";");
+      await runFFmpeg(["-i", p, "-vf", vf, "-q:v", "2", "-y", sp]);
       scaledPaths.push(sp);
     }
 
